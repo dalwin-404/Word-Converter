@@ -75,36 +75,72 @@ export async function parseDocxFile(file: File): Promise<{ questions: Question[]
 export function parseHtmlBlocks(html: string): Question[] {
   const blocks: BlockItem[] = [];
 
-  // Match tags like <p>...</p>, <li>...</li>, <tr>...</tr>, <td>...</td> or <img ... />
-  const tagRegex = /(<img\b[^>]*src=["']([^"']+)["'][^>]*>|<(?:p|li|h[1-6]|tr|td)[^>]*>(.*?)<\/(?:p|li|h[1-6]|tr|td)>)/gi;
-  let match;
-  let hasExtracted = false;
+  // 1. Convert tables to formatted text rows with pipes (|) and preserve any images inside cells
+  let processed = html.replace(/<table\b[^>]*>([\s\S]*?)<\/table>/gi, (_tableMatch, tableContent) => {
+    const rowMatches = tableContent.match(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi) || [];
+    const rows = rowMatches.map((tr: string) => {
+      const cellMatches = tr.match(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi) || [];
+      const cells = cellMatches.map((cell: string) => {
+        const imgMatch = cell.match(/<img\b[^>]*src=["']([^"']+)["'][^>]*>/i);
+        let cellText = cell.replace(/<img\b[^>]*src=["']([^"']+)["'][^>]*>/gi, ' [Diagram] ');
+        cellText = cellText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+        if (imgMatch) {
+          return `${cellText} \n__CBT_EXTRACTED_IMG__${imgMatch[1]}__END_CBT_IMG__\n`;
+        }
+        return cellText;
+      });
+      return cells.filter(Boolean).join(' | ');
+    });
+    return '\n' + rows.filter(Boolean).join('\n') + '\n';
+  });
 
-  while ((match = tagRegex.exec(html)) !== null) {
-    hasExtracted = true;
-    const imgSrc = match[2];
-    const innerText = match[3];
+  // 2. Mark all images (including those inside <p>, <div>, etc.) with unique token
+  processed = processed.replace(/<img\b[^>]*src=["']([^"']+)["'][^>]*>/gi, (_match, src) => {
+    return `\n__CBT_EXTRACTED_IMG__${src}__END_CBT_IMG__\n`;
+  });
 
-    if (imgSrc) {
-      blocks.push({ type: 'image', imageSrc: imgSrc });
-    } else if (innerText !== undefined) {
-      const cleanText = innerText
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#039;/g, "'")
-        .trim();
+  // 3. Convert block closing and break tags to newlines
+  processed = processed
+    .replace(/<\/(?:p|li|h[1-6]|div)>/gi, '\n')
+    .replace(/<br\s*\/?>/gi, '\n');
 
-      if (cleanText) {
-        blocks.push({ type: 'text', text: cleanText });
+  // 4. Strip remaining HTML tags
+  processed = processed.replace(/<[^>]+>/g, ' ');
+
+  // 5. Decode common HTML entities
+  processed = processed
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&deg;/g, '°');
+
+  // 6. Split into lines and reconstruct clean block stream
+  const lines = processed.split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    if (trimmed.includes('__CBT_EXTRACTED_IMG__')) {
+      const imgMatches = [...trimmed.matchAll(/__CBT_EXTRACTED_IMG__(.*?)__END_CBT_IMG__/g)];
+      for (const m of imgMatches) {
+        if (m[1]) {
+          blocks.push({ type: 'image', imageSrc: m[1] });
+        }
       }
+      const textWithoutImg = trimmed.replace(/__CBT_EXTRACTED_IMG__(.*?)__END_CBT_IMG__/g, '').trim();
+      if (textWithoutImg) {
+        blocks.push({ type: 'text', text: textWithoutImg });
+      }
+    } else {
+      blocks.push({ type: 'text', text: trimmed });
     }
   }
 
-  if (!hasExtracted || blocks.length === 0) {
+  if (blocks.length === 0) {
     const stripped = html.replace(/<[^>]+>/g, '\n');
     return parseText(stripped);
   }
@@ -242,16 +278,22 @@ function processBlocksIntoQuestions(rawBlocks: BlockItem[]): Question[] {
 
   let currentQ: Question | null = null;
   let currentOptionLetter: string | null = null;
+  let pendingImage: string | null = null;
 
   for (let i = 0; i < keptBlocks.length; i++) {
     const item = keptBlocks[i];
 
-    // Handle Image Block
+    // Handle Image Block (Auto-extracted from Word document)
     if (item.type === 'image' && item.imageSrc) {
-      if (currentQ) {
-        if (!currentQ.image) {
-          currentQ.image = item.imageSrc;
-        }
+      if (currentQ && !currentQ.image && !currentOptionLetter) {
+        // Image appears directly under or alongside the current question stem
+        currentQ.image = item.imageSrc;
+      } else if (currentQ && !currentQ.image) {
+        // Image belongs to current question
+        currentQ.image = item.imageSrc;
+      } else {
+        // Image appears before upcoming question stem
+        pendingImage = item.imageSrc;
       }
       continue;
     }
@@ -287,9 +329,11 @@ function processBlocksIntoQuestions(rawBlocks: BlockItem[]): Question[] {
         stem: stem,
         options: {},
         answer: null,
+        image: pendingImage || undefined,
         warnings: [],
         rawLines: [text],
       };
+      pendingImage = null;
       currentOptionLetter = null;
       continue;
     }
@@ -315,9 +359,11 @@ function processBlocksIntoQuestions(rawBlocks: BlockItem[]): Question[] {
         stem: text.trim(),
         options: {},
         answer: null,
+        image: pendingImage || undefined,
         warnings: [],
         rawLines: [text],
       };
+      pendingImage = null;
       currentOptionLetter = null;
       continue;
     }
@@ -364,12 +410,16 @@ function processBlocksIntoQuestions(rawBlocks: BlockItem[]): Question[] {
       continue;
     }
 
-    // 6. Continuation line (multi-line question stem or multi-line option)
+    // 6. Continuation line (multi-line question stem, table rows, or multi-line option)
     if (currentQ) {
       if (currentOptionLetter && currentQ.options[currentOptionLetter]) {
         currentQ.options[currentOptionLetter] += ' ' + text;
       } else {
-        currentQ.stem = currentQ.stem ? currentQ.stem + ' ' + text : text;
+        if (text.includes('|') || currentQ.stem.includes('|')) {
+          currentQ.stem = currentQ.stem ? currentQ.stem + '\n' + text : text;
+        } else {
+          currentQ.stem = currentQ.stem ? currentQ.stem + ' ' + text : text;
+        }
       }
       currentQ.rawLines?.push(text);
     }

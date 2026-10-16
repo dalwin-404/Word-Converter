@@ -64,23 +64,34 @@ export async function generateDocxBlob(questions: Question[], options: ExportOpt
   questions.forEach((q, idx) => {
     const qNum = idx + 1;
 
-    // Question Stem: e.g. "1. What is the capital of Nigeria?"
+    // Question Stem: e.g. "1. What is the capital of Nigeria?" (handles multi-line and tables)
+    const stemLines = (q.stem || '').split('\n');
+    const stemChildren: TextRun[] = [
+      new TextRun({
+        text: `${qNum}. `,
+        bold: true,
+        size: 22, // 11pt
+        font: options.fontName,
+      }),
+    ];
+
+    stemLines.forEach((sLine, sIdx) => {
+      if (sIdx > 0) {
+        stemChildren.push(new TextRun({ break: 1 }));
+      }
+      stemChildren.push(
+        new TextRun({
+          text: sLine,
+          size: 22,
+          font: options.fontName,
+        })
+      );
+    });
+
     paragraphs.push(
       new Paragraph({
         spacing: { before: 180, after: 60 },
-        children: [
-          new TextRun({
-            text: `${qNum}. `,
-            bold: true,
-            size: 22, // 11pt
-            font: options.fontName,
-          }),
-          new TextRun({
-            text: q.stem,
-            size: 22,
-            font: options.fontName,
-          }),
-        ],
+        children: stemChildren,
       })
     );
 
