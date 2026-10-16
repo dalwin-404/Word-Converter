@@ -168,9 +168,10 @@ export async function generateDocxBlob(questions: Question[], options: ExportOpt
       }
     }
 
-    // Options A, B, C, D
+    // Options (supports Yoruba A, B, D, E scheme or standard A, B, C, D)
+    const isYorubaScheme = options.subject?.toUpperCase().includes('YOR') || (!q.options['C'] && (q.options['D'] || q.options['E']));
     const optionKeys = Object.keys(q.options).sort();
-    const displayKeys = optionKeys.length > 0 ? optionKeys : ['A', 'B', 'C', 'D'];
+    const displayKeys = optionKeys.length > 0 ? optionKeys : (isYorubaScheme ? ['A', 'B', 'D', 'E'] : ['A', 'B', 'C', 'D']);
 
     displayKeys.forEach((key) => {
       const val = q.options[key] || '';
@@ -247,48 +248,92 @@ export async function generateDocxBlob(questions: Question[], options: ExportOpt
 }
 
 export async function generateGuideTemplateDocxBlob(options: ExportOptions): Promise<Blob> {
-  const guideQuestions: Question[] = [
-    {
-      id: 1,
-      number: 1,
-      stem: "What is the capital city of Nigeria?",
-      options: { A: "Lagos", B: "Abuja", C: "Ibadan", D: "Kano" },
-      answer: "B",
-      warnings: [],
-    },
-    {
-      id: 2,
-      number: 2,
-      stem: "Which organ in the human body is responsible for pumping blood?",
-      options: { A: "Lungs", B: "Liver", C: "Heart", D: "Kidney" },
-      answer: "C",
-      warnings: [],
-    },
-    {
-      id: 3,
-      number: 3,
-      stem: "What is the value of 15 multiplied by 4?",
-      options: { A: "45", B: "50", C: "55", D: "60" },
-      answer: "D",
-      warnings: [],
-    },
-    {
-      id: 4,
-      number: 4,
-      stem: "What is the chemical formula for water?",
-      options: { A: "CO2", B: "NaCl", C: "H2O", D: "O2" },
-      answer: "C",
-      warnings: [],
-    },
-    {
-      id: 5,
-      number: 5,
-      stem: "Which continent is Nigeria located in?",
-      options: { A: "Asia", B: "Africa", C: "Europe", D: "South America" },
-      answer: "B",
-      warnings: [],
-    },
-  ];
+  const isYoruba = options.subject?.toUpperCase().includes('YOR');
+  const guideQuestions: Question[] = isYoruba
+    ? [
+        {
+          id: 1,
+          number: 1,
+          stem: "Kí ni olú-ìlú orílẹ̀-èdè Nàìjíríà?",
+          options: { A: "Èkó", B: "Àbújá", D: "Ìbàdàn", E: "Kánò" },
+          answer: "B",
+          warnings: [],
+        },
+        {
+          id: 2,
+          number: 2,
+          stem: "Èwo nínú àwọn wọ̀nyí ni kì í ṣe lẹ́tà nínú álífábẹ́ẹ̀tì Yorùbá?",
+          options: { A: "D", B: "Ẹ", D: "GB", E: "C" },
+          answer: "E",
+          warnings: [],
+        },
+        {
+          id: 3,
+          number: 3,
+          stem: "Kí ni orúkọ oyè ọba ìlú Ọ̀yọ́?",
+          options: { A: "Ọọ̀ni", B: "Aláàfin", D: "Awùjalẹ̀", E: "Ọba Èkó" },
+          answer: "B",
+          warnings: [],
+        },
+        {
+          id: 4,
+          number: 4,
+          stem: "Kí ni orúkọ ohun èlò tí a fi ń dá iná?",
+          options: { A: "Ìsáná", B: "Omi", D: "Igi", E: "Aṣọ" },
+          answer: "A",
+          warnings: [],
+        },
+        {
+          id: 5,
+          number: 5,
+          stem: "Orílẹ̀-èdè wo ni orílẹ̀-èdè Nàìjíríà wà nínú rẹ̀?",
+          options: { A: "Éṣíà", B: "Áfíríkà", D: "Yúróòpù", E: "Gẹ̀ẹ́sì" },
+          answer: "B",
+          warnings: [],
+        },
+      ]
+    : [
+        {
+          id: 1,
+          number: 1,
+          stem: "What is the capital city of Nigeria?",
+          options: { A: "Lagos", B: "Abuja", C: "Ibadan", D: "Kano" },
+          answer: "B",
+          warnings: [],
+        },
+        {
+          id: 2,
+          number: 2,
+          stem: "Which organ in the human body is responsible for pumping blood?",
+          options: { A: "Lungs", B: "Liver", C: "Heart", D: "Kidney" },
+          answer: "C",
+          warnings: [],
+        },
+        {
+          id: 3,
+          number: 3,
+          stem: "What is the value of 15 multiplied by 4?",
+          options: { A: "45", B: "50", C: "55", D: "60" },
+          answer: "D",
+          warnings: [],
+        },
+        {
+          id: 4,
+          number: 4,
+          stem: "What is the chemical formula for water?",
+          options: { A: "CO2", B: "NaCl", C: "H2O", D: "O2" },
+          answer: "C",
+          warnings: [],
+        },
+        {
+          id: 5,
+          number: 5,
+          stem: "Which continent is Nigeria located in?",
+          options: { A: "Asia", B: "Africa", C: "Europe", D: "South America" },
+          answer: "B",
+          warnings: [],
+        },
+      ];
 
   return await generateDocxBlob(guideQuestions, options);
 }

@@ -581,8 +581,12 @@ function finalizeQuestion(q: Question, bottomKeys: { [key: number]: string }) {
   }
 
   const optCount = Object.keys(q.options).length;
+  // Support Yoruba exam standard: A, B, D, E (since "C" does not exist in the Yoruba alphabet)
+  const isYorubaScheme = !q.options['C'] && (q.options['D'] || q.options['E']);
+  const expectedLetters = isYorubaScheme ? ['A', 'B', 'D', 'E'] : ['A', 'B', 'C', 'D'];
+
   if (optCount < 4) {
-    const missing = ['A', 'B', 'C', 'D'].filter((l) => !q.options[l]);
+    const missing = expectedLetters.filter((l) => !q.options[l]);
     warnings.push(`Incomplete options (${optCount}/4 detected). Missing: ${missing.join(', ')}`);
   }
 

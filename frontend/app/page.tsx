@@ -781,9 +781,15 @@ export default function CBTFlowApp() {
                     onChange={(e) => setOptionPrefix(e.target.value as any)}
                     className="w-full text-xs px-2.5 py-1.5 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:border-amber-500 text-slate-200"
                   >
-                    <option value="A)">A) B) C) D)</option>
-                    <option value="A.">A. B. C. D.</option>
-                    <option value="(A)">(A) (B) (C) (D)</option>
+                    <option value="A)">
+                      {subject.toUpperCase().includes('YOR') ? 'A) B) D) E) (Yorùbá)' : 'A) B) C) D)'}
+                    </option>
+                    <option value="A.">
+                      {subject.toUpperCase().includes('YOR') ? 'A. B. D. E. (Yorùbá)' : 'A. B. C. D.'}
+                    </option>
+                    <option value="(A)">
+                      {subject.toUpperCase().includes('YOR') ? '(A) (B) (D) (E) (Yorùbá)' : '(A) (B) (C) (D)'}
+                    </option>
                   </select>
                 </div>
                 <div>
@@ -1124,8 +1130,15 @@ export default function CBTFlowApp() {
                 {questions.map((q, idx) => {
                   const qNum = idx + 1;
                   const optionKeys = Object.keys(q.options).sort();
-                  const displayKeys = optionKeys.length > 0 ? optionKeys : ['A', 'B', 'C', 'D'];
+                  const isYoruba =
+                    subject.toUpperCase().includes('YOR') ||
+                    (!q.options['C'] && (q.options['D'] || q.options['E']));
+                  const fallbackKeys = isYoruba ? ['A', 'B', 'D', 'E'] : ['A', 'B', 'C', 'D'];
+                  const displayKeys = optionKeys.length > 0 ? optionKeys : fallbackKeys;
                   const ans = (q.answer || '').toUpperCase();
+                  const availableButtons = Array.from(
+                    new Set([...displayKeys, ...(ans ? [ans] : [])])
+                  ).sort();
 
                   return (
                     <div
@@ -1220,7 +1233,7 @@ export default function CBTFlowApp() {
                         <div className="flex items-center space-x-2">
                           <span className="font-bold text-blue-700">ANSWER:</span>
                           <div className="flex items-center space-x-1.5">
-                            {['A', 'B', 'C', 'D'].map((letter) => (
+                            {availableButtons.map((letter) => (
                               <button
                                 key={letter}
                                 onClick={() => handleQuickAnswerChange(idx, letter)}
@@ -1311,6 +1324,13 @@ export default function CBTFlowApp() {
                 <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center flex-shrink-0 text-[11px]">4</span>
                 <div>
                   <strong className="text-white">Diagrams & Tables:</strong> You do <span className="text-emerald-300 font-semibold">NOT</span> need to manually upload pictures! Just paste your diagrams, biological figures, or math tables directly inside your Word document. CBTFlow automatically extracts and attaches them to the right question.
+                </div>
+              </div>
+
+              <div className="flex items-start space-x-2.5">
+                <span className="w-5 h-5 rounded-full bg-amber-500/20 text-amber-400 font-bold flex items-center justify-center flex-shrink-0 text-[11px]">5</span>
+                <div>
+                  <strong className="text-white">Èdè Yorùbá Support (A, B, D, E):</strong> The standard Yorùbá alphabet does not contain the letter &apos;C&apos;. CBTFlow natively accommodates 4-option exams using <code className="text-amber-300">A, B, D, E</code>, preserves all tone marks &amp; sub-dots (<code className="text-amber-300">á, à, ā, ẹ, ọ, ṣ</code>), and validates them without missing-option errors!
                 </div>
               </div>
             </div>
