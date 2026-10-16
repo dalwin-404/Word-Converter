@@ -651,7 +651,7 @@ export default function CBTFlowApp() {
                   </p>
                   <p className="text-[10px] text-emerald-400 mt-1.5 flex items-center justify-center space-x-1 font-medium bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
                     <CheckCircle2 className="w-3 h-3 text-emerald-400 flex-shrink-0" />
-                    <span>Auto-extracts diagrams, images, and tables directly from Word</span>
+                    <span>Auto-extracts diagrams, tables & bottom answer keys (e.g. 1. A 2. C 3. D...)</span>
                   </p>
                   <input
                     ref={fileInputRef}
@@ -1042,7 +1042,7 @@ export default function CBTFlowApp() {
               <div className="flex items-start space-x-2.5">
                 <span className="w-5 h-5 rounded-full bg-blue-500/20 text-blue-400 font-bold flex items-center justify-center flex-shrink-0 text-[11px]">3</span>
                 <div>
-                  <strong className="text-white">Answer Key:</strong> Write <code className="text-blue-400">ANSWER: [Letter]</code> (e.g. <code className="text-blue-400">ANSWER: B</code>) directly beneath option D.
+                  <strong className="text-white">Answer Keys (Flexible):</strong> Either write <code className="text-blue-400">ANSWER: [Letter]</code> beneath each question, <strong className="text-amber-300">OR</strong> list all answers together at the bottom (e.g. <code className="text-amber-300">1. A 2. C 3. D 4. E</code> or under <code className="text-amber-300">ANSWERS:</code>). CBTFlow automatically connects each answer to its question!
                 </div>
               </div>
 

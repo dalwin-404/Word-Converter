@@ -25,9 +25,15 @@ const TRAILING_ANSWER_REGEX = /\s*(?:ANSWER|ANS|CORRECT(?:\s*ANSWER)?|KEY)\s*[:=
 // Regex for answer glued to next question: e.g. "ANSWER: B 2. What is..."
 const GLUED_ANS_NEXT_Q_REGEX = /^(ANSWER|ANS|CORRECT|KEY)\s*[:=\-]?\s*([A-Ea-e])\s+((?:(?:Question|Q|Ques|No)\s*[-.:]?\s*\d+|\(?\d+[-.:)]).+)$/i;
 
-// Bottom answer keys regex
-const BOTTOM_KEY_ITEM_REGEX = /(?:Q?(\d+)\s*[:.-]?\s*([A-Ea-e]))/gi;
-const BOTTOM_SECTION_REGEX = /^(?:ANSWER\s+KEYS?|MARKING\s+SCHEME|ANSWERS\s+SHEET)\b/i;
+// Comprehensive Bottom Answer Keys Regexes
+// Matches headers: "ANSWERS:", "ANSWER KEY", "MARKING SCHEME", "MARKING GUIDE", "SOLUTIONS:", "KEYS:", "CORRECT ANSWERS:"
+const BOTTOM_SECTION_HEADER_REGEX = /^(?:ANSWER\s*KEYS?|MARKING\s*(?:SCHEME|GUIDE)|ANSWERS?\s*(?:SHEET)?|SOLUTIONS?|CORRECT\s*ANSWERS?|KEYS?)\s*[:=\-]?\s*(.*)$/i;
+
+// Matches key items: "1. A", "1: B", "1-C", "1) D", "1. (A)", "1. [B]", "Q1: A", "No. 1 = B"
+const BOTTOM_KEY_ITEM_REGEX = /(?:^|[\s,;|]+)(?:Q|No\.?)?\s*(\d+)\s*[-.:=|)]\s*\(?\[?([A-Ea-e])\)?\]?(?=$|[\s,;|]+)/gi;
+
+// Matches a single key line: "1. A", "1. a", "1. (A)", "1 - B"
+const SINGLE_KEY_LINE_REGEX = /^(?:Q|No\.?)?\s*(\d+)\s*[-.:=|)]\s*\(?\[?([A-Ea-e])\)?\]?\s*$/i;
 
 const ROMAN_MAP: { [key: string]: string } = {
   i: 'A',
@@ -236,45 +242,120 @@ function convertRomanOptionsToAlpha(line: string): string {
   });
 }
 
-function processBlocksIntoQuestions(rawBlocks: BlockItem[]): Question[] {
-  const blocks = normalizeBlocks(rawBlocks);
-  const questions: Question[] = [];
+/**
+ * Scans for bottom answer keys placed underneath questions, such as:
+ * - "1. a 2. C 3. D 4. E 5. A"
+ * - "1. A, 2. B, 3. C, 4. D"
+ * - "ANSWERS: 1. A 2. B 3. C"
+ * - "MARKING SCHEME: 1. A \n 2. B \n 3. C"
+ * - Table rows with answers: "1 | A | 2 | B"
+ * Excludes these answer lines from being misidentified as question stems.
+ */
+function extractBottomAnswerKeys(blocks: BlockItem[]): {
+  bottomKeys: { [key: number]: string };
+  keptBlocks: BlockItem[];
+} {
   const bottomKeys: { [key: number]: string } = {};
-
-  // First pass: scan for bottom answer keys in text blocks
   const keptBlocks: BlockItem[] = [];
-  let inBottomKeySection = false;
+  let inSection = false;
 
-  for (const block of blocks) {
-    if (block.type === 'text' && block.text) {
-      const line = block.text;
-      if (ANSWER_REGEX.test(line)) {
-        keptBlocks.push(block);
-        continue;
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (block.type !== 'text' || !block.text) {
+      keptBlocks.push(block);
+      continue;
+    }
+
+    const line = block.text.trim();
+
+    // Do not confuse standard single-question answer tags (e.g. "ANSWER: B") with bottom key sections
+    if (ANSWER_REGEX.test(line)) {
+      keptBlocks.push(block);
+      continue;
+    }
+
+    // 1. Check for explicit bottom section header (e.g. "ANSWERS:", "MARKING SCHEME", "ANSWER KEY")
+    const headerMatch = line.match(BOTTOM_SECTION_HEADER_REGEX);
+    if (headerMatch) {
+      inSection = true;
+      const remainder = headerMatch[1].trim();
+      if (remainder) {
+        const matches = [...remainder.matchAll(BOTTOM_KEY_ITEM_REGEX)];
+        for (const m of matches) {
+          bottomKeys[parseInt(m[1], 10)] = m[2].toUpperCase();
+        }
       }
+      continue; // Omit header from question stems
+    }
 
-      if (BOTTOM_SECTION_REGEX.test(line)) {
-        inBottomKeySection = true;
-        let match;
-        const regex = new RegExp(BOTTOM_KEY_ITEM_REGEX);
-        while ((match = regex.exec(line)) !== null) {
-          bottomKeys[parseInt(match[1], 10)] = match[2].toUpperCase();
+    if (inSection) {
+      // 2A. Key items within explicit answer section
+      const matches = [...line.matchAll(BOTTOM_KEY_ITEM_REGEX)];
+      if (matches.length > 0) {
+        for (const m of matches) {
+          bottomKeys[parseInt(m[1], 10)] = m[2].toUpperCase();
         }
         continue;
       }
 
-      if (inBottomKeySection) {
-        let match;
-        const regex = new RegExp(BOTTOM_KEY_ITEM_REGEX);
-        while ((match = regex.exec(line)) !== null) {
-          bottomKeys[parseInt(match[1], 10)] = match[2].toUpperCase();
-        }
+      // 2B. Single key line: "1. A" or "1 - B"
+      const singleMatch = line.match(SINGLE_KEY_LINE_REGEX);
+      if (singleMatch) {
+        bottomKeys[parseInt(singleMatch[1], 10)] = singleMatch[2].toUpperCase();
         continue;
+      }
+
+      // 2C. Comma/space-separated list of letters: "A, B, C, D, A"
+      const pureLetters = line.split(/[\s,;|]+/).map((s) => s.trim().toUpperCase()).filter(Boolean);
+      if (pureLetters.length >= 2 && pureLetters.every((s) => /^[A-E]$/.test(s))) {
+        const startNum = Object.keys(bottomKeys).length + 1;
+        pureLetters.forEach((letter, idx) => {
+          bottomKeys[startNum + idx] = letter;
+        });
+        continue;
+      }
+    } else {
+      // 3. No header written, but line contains 2 or more answer pairs:
+      // e.g. "1. a 2. C 3. D 4. E 5. A" or "1. A, 2. C, 3. D"
+      const matches = [...line.matchAll(BOTTOM_KEY_ITEM_REGEX)];
+      if (matches.length >= 2) {
+        for (const m of matches) {
+          bottomKeys[parseInt(m[1], 10)] = m[2].toUpperCase();
+        }
+        continue; // Omit from question stems
+      }
+
+      // 4. Standalone single key line: e.g. "1. A"
+      const singleMatch = line.match(SINGLE_KEY_LINE_REGEX);
+      if (singleMatch) {
+        let hasSisterKeys = false;
+        for (let j = i + 1; j < Math.min(i + 5, blocks.length); j++) {
+          const nextText = blocks[j].text?.trim() || '';
+          if (SINGLE_KEY_LINE_REGEX.test(nextText)) {
+            hasSisterKeys = true;
+            break;
+          }
+        }
+        if (hasSisterKeys || Object.keys(bottomKeys).length > 0) {
+          bottomKeys[parseInt(singleMatch[1], 10)] = singleMatch[2].toUpperCase();
+          continue;
+        }
       }
     }
 
     keptBlocks.push(block);
   }
+
+  return { bottomKeys, keptBlocks };
+}
+
+function processBlocksIntoQuestions(rawBlocks: BlockItem[]): Question[] {
+  // 1. Pre-scan and extract bottom answer keys / marking schemes
+  const { bottomKeys, keptBlocks: cleanRawBlocks } = extractBottomAnswerKeys(rawBlocks);
+
+  // 2. Normalize question stems, glued answers, and options
+  const keptBlocks = normalizeBlocks(cleanRawBlocks);
+  const questions: Question[] = [];
 
   let currentQ: Question | null = null;
   let currentOptionLetter: string | null = null;
@@ -431,11 +512,25 @@ function processBlocksIntoQuestions(rawBlocks: BlockItem[]): Question[] {
     questions.push(currentQ);
   }
 
-  // Continuity check
+  // Continuity check and fallback index-based answer assignment
   questions.forEach((q, idx) => {
     const expected = idx + 1;
     if (q.number !== expected) {
       q.warnings.push(`Numbering mismatch: Expected #${expected}, found #${q.number}`);
+    }
+
+    if (!q.answer) {
+      if (bottomKeys[q.number]) {
+        q.answer = bottomKeys[q.number];
+      } else if (bottomKeys[expected]) {
+        q.answer = bottomKeys[expected];
+      }
+      if (q.answer) {
+        q.warnings = q.warnings.filter((w) => !w.includes('Missing correct answer'));
+        if (!q.options[q.answer]) {
+          q.warnings.push(`Marked answer "${q.answer}" does not match any detected options`);
+        }
+      }
     }
   });
 
@@ -469,8 +564,12 @@ function splitInlineOptions(line: string): [string, string][] {
 }
 
 function finalizeQuestion(q: Question, bottomKeys: { [key: number]: string }) {
-  if (!q.answer && bottomKeys[q.number]) {
-    q.answer = bottomKeys[q.number];
+  if (!q.answer) {
+    if (bottomKeys[q.number]) {
+      q.answer = bottomKeys[q.number];
+    } else if (bottomKeys[q.id]) {
+      q.answer = bottomKeys[q.id];
+    }
   }
 
   const warnings: string[] = [];
