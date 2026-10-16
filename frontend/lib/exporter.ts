@@ -1,4 +1,4 @@
-import { Document, Paragraph, TextRun, AlignmentType, HeadingLevel, Packer } from 'docx';
+import { Document, Paragraph, TextRun, ImageRun, AlignmentType, Packer } from 'docx';
 import * as XLSX from 'xlsx';
 import JSZip from 'jszip';
 import { Question, BatchFileResult } from './types';
@@ -9,6 +9,16 @@ export interface ExportOptions {
   instructions: string;
   optionPrefix: 'A)' | 'A.' | '(A)';
   fontName: string;
+}
+
+export function base64ToUint8Array(base64: string): Uint8Array {
+  const pureBase64 = base64.replace(/^data:image\/\w+;base64,/, '');
+  const binaryString = atob(pureBase64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
 }
 
 export async function generateDocxBlob(questions: Question[], options: ExportOptions): Promise<Blob> {
@@ -73,6 +83,38 @@ export async function generateDocxBlob(questions: Question[], options: ExportOpt
         ],
       })
     );
+
+    // Embedded Diagram / Science Image
+    if (q.image) {
+      try {
+        const imgBytes = base64ToUint8Array(q.image);
+        const imgType: 'png' | 'jpg' | 'gif' =
+          q.image.includes('image/jpeg') || q.image.includes('image/jpg')
+            ? 'jpg'
+            : q.image.includes('image/gif')
+            ? 'gif'
+            : 'png';
+
+        paragraphs.push(
+          new Paragraph({
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 80, after: 120 },
+            children: [
+              new ImageRun({
+                data: imgBytes,
+                transformation: {
+                  width: 320,
+                  height: 200,
+                },
+                type: imgType,
+              }),
+            ],
+          })
+        );
+      } catch (err) {
+        console.warn('Failed to embed diagram in docx', err);
+      }
+    }
 
     // Options A, B, C, D
     const optionKeys = Object.keys(q.options).sort();
@@ -207,6 +249,9 @@ export function generateAikenText(questions: Question[], schoolName: string): st
 
   questions.forEach((q, idx) => {
     lines.push(`${idx + 1}. ${q.stem}`);
+    if (q.image) {
+      lines.push(`// [IMAGE ATTACHED FOR QUESTION ${idx + 1}]`);
+    }
     const keys = Object.keys(q.options).sort();
     keys.forEach((key) => {
       lines.push(`${key}) ${q.options[key]}`);
@@ -228,6 +273,7 @@ export function generateExcelBlob(questions: Question[]): Blob {
     'Option D': q.options['D'] || '',
     'Option E': q.options['E'] || '',
     'Correct Answer': q.answer || '',
+    'Has Diagram': q.image ? 'Yes' : 'No',
     'Status': q.warnings.length === 0 ? 'OK' : q.warnings.join('; '),
   }));
 
@@ -248,6 +294,7 @@ export async function generateBatchZipBlob(
   const wordFolder = zip.folder('01_Word_Standardized');
   const aikenFolder = zip.folder('02_Aiken_CBT_Txt');
   const excelFolder = zip.folder('03_Excel_Spreadsheets');
+  const diagramsFolder = zip.folder('04_Exam_Diagrams');
 
   let reportText = `======================================================================\n`;
   reportText += `  ${options.schoolName.toUpperCase()} - CBTFLOW BATCH CONVERSION REPORT\n`;
@@ -267,6 +314,18 @@ export async function generateBatchZipBlob(
     wordFolder?.file(`${file.cleanName}_CBT_Standard.docx`, docxBlob);
     aikenFolder?.file(`${file.cleanName}_Aiken.txt`, aikenText);
     excelFolder?.file(`${file.cleanName}_Matrix.xlsx`, excelBlob);
+
+    // Save individual images for CBT portal uploads
+    file.questions.forEach((q) => {
+      if (q.image) {
+        try {
+          const imgBytes = base64ToUint8Array(q.image);
+          diagramsFolder?.file(`${file.cleanName}_Q${q.number}_diagram.png`, imgBytes);
+        } catch (e) {
+          console.warn('Failed to save diagram into zip', e);
+        }
+      }
+    });
 
     reportText += `✓ [${file.cleanName}]\n`;
     reportText += `   • Questions: ${file.questions.length}\n`;

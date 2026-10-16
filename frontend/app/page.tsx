@@ -23,7 +23,8 @@ import {
   HelpCircle,
   CheckCircle,
   Copy,
-  Info
+  Info,
+  Image as ImageIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { Question, SchoolPreset, BatchFileResult } from '../lib/types';
@@ -77,6 +78,8 @@ const PRESETS: SchoolPreset[] = [
   },
 ];
 
+const SAMPLE_MATH_DIAGRAM = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAANwAAAB4CAYAAACZ15x5AAACz0lEQVR4nO3VQW5TQRBF0Yi1sze2wRoYRQgBygARWY7zbfd/XdV9Bmdeg7p6L68/f/0BMl5mHwA7ERwECQ6CBAdBgoMgwUGQ4CBIcBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CBIcBAkOggTHVF++fpt+Q5LgmOYtNsHByf6FJjg42WVsgoMTXAtNcHCCy8C+//gtOBjt2pq9xSY4GOyj0ARX4AjWcWvVBCc4BjoSmuAKHEFvR1dNcILjSfeGJrgCR9DPI6smOMHxgGdCE1yBI+jh2VUTnOA4aFRogitwBHWNXDXBCY4bzghNcAWOoJazVk1wguPC2aEJrsARzJdYNcEJjuCqCU5wW0uvmuAEt61ZoQmuwBHkzFw1wQluKxVCE1yBIzhXlVUTnOCWVy00wRU4gvEqrprgBLekyqEJrsARjFF91QQnuGV0CU1wBY7gcZ1WTXCCa61jaIIrcAT36bpqghNcO91DE1yBI/jcCqsmOMG1sFJogitwBNettmqCE1xZq4YmuAJH8N/KqyY4wZWyQ2iCK3DE7nZZNcEJbrrdQhNcgSN2tOOqCU5wU+wcmuAKHLGL3VdNcIKLEZrgXgV3PqsmuPcEdyKhCe6S4E5g1QT3EcENJjTB3SK4Qaya4I4Q3ABCE9xRgnuCVRPcvQT3IKEJ7hGCu5NVE9wzBHcHoQnuWYI7wKoJbhTBfUJoghtJcAdDE5vgRhDcgdhmP+eKBIdVE5zgZsU2+yFXJ7hNWTXBCW5SbLOfcCeC24hVm09wmxBaDYJbnFWrRXALE1o9gluQVatLcIsRWm2CW4RV60FwCxBaH4JrzKr1I7imhNaT4Jqxar0JrhGh9Se4Bq6tGv3N/ivBiW0rs39LcELbyuwfExwsSnAQJDgIEhwECQ6CBAdBgoMgwUGQ4CBIcBAkOAgSHAQJDoIEB0GCgyDBQZDgIEhwECQ4CPoLq5E6YilcvlAAAAAASUVORK5CYII=";
+
 const SAMPLE_TEXT = `EXCELLENCE ACADEMY - CBT EXAM QUESTIONS TEMPLATE
 Instructions for Teachers: Type each question number (e.g. 1.), followed by options A, B, C, D, and write ANSWER: [Letter] below the options.
 
@@ -94,12 +97,12 @@ C) Heart
 D) Kidney
 ANSWER: C
 
-3. What is the value of 15 multiplied by 4?
-A) 45
-B) 50
-C) 55
-D) 60
-ANSWER: D
+3. In the right-angled triangle diagram shown below, calculate the value of the hypotenuse (x):
+A) 4 cm
+B) 5 cm
+C) 6 cm
+D) 7 cm
+ANSWER: B
 
 4. What is the chemical formula for water?
 A) CO2
@@ -171,10 +174,13 @@ export default function CBTFlowApp() {
     setRawText(SAMPLE_TEXT);
     setActiveTab('text');
     const parsed = parseText(SAMPLE_TEXT);
+    if (parsed.length >= 3) {
+      parsed[2].image = SAMPLE_MATH_DIAGRAM;
+    }
     setQuestions(parsed);
     setBatchZipBlob(null);
     setBatchResults([]);
-    setActiveFileName('Sample_5_Questions.txt');
+    setActiveFileName('Sample_STEM_Exam.txt');
     setMobileActiveView('preview');
     confetti({ particleCount: 40, spread: 60, origin: { y: 0.7 } });
   };
@@ -278,6 +284,32 @@ export default function CBTFlowApp() {
       const target = { ...next[qIndex], answer: newAnswer };
       // re-check warnings
       target.warnings = target.warnings.filter((w) => !w.includes('Missing correct answer'));
+      next[qIndex] = target;
+      return next;
+    });
+  };
+
+  const handleImageUpload = (qIndex: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const dataUrl = event.target?.result as string;
+        setQuestions((prev) => {
+          const next = [...prev];
+          next[qIndex] = { ...next[qIndex], image: dataUrl };
+          return next;
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = (qIndex: number) => {
+    setQuestions((prev) => {
+      const next = [...prev];
+      const target = { ...next[qIndex] };
+      delete target.image;
       next[qIndex] = target;
       return next;
     });
@@ -831,13 +863,44 @@ export default function CBTFlowApp() {
                           : 'border-slate-100 hover:border-slate-200 bg-slate-50/40'
                       } transition space-y-2.5`}
                     >
-                      {/* Question Header */}
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start space-x-2">
+                      {/* Question Header & Diagram Attach Action */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start space-x-2 flex-1">
                           <span className="font-extrabold text-sm text-slate-900">{qNum}.</span>
                           <span className="text-sm font-semibold text-slate-800 leading-snug">{q.stem}</span>
                         </div>
+                        <label className="cursor-pointer text-[11px] font-medium text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100/80 border border-blue-200 px-2 py-1 rounded-lg flex items-center space-x-1 flex-shrink-0 transition shadow-2xs">
+                          <ImageIcon className="w-3.5 h-3.5 text-blue-600" />
+                          <span className="hidden sm:inline">{q.image ? 'Change Diagram' : 'Attach Diagram'}</span>
+                          <span className="sm:hidden">{q.image ? 'Change' : 'Diagram'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => handleImageUpload(idx, e)}
+                          />
+                        </label>
                       </div>
+
+                      {/* Render Diagram / Scientific Figure if present */}
+                      {q.image && (
+                        <div className="relative group my-2 p-2 bg-slate-100 rounded-xl border border-slate-200 inline-block max-w-full">
+                          <img
+                            src={q.image}
+                            alt={`Diagram for Question ${qNum}`}
+                            className="max-h-60 max-w-full rounded-lg object-contain bg-white shadow-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveImage(idx)}
+                            className="absolute top-3.5 right-3.5 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded-md text-[10px] font-semibold transition shadow-md flex items-center space-x-1"
+                            title="Remove Diagram"
+                          >
+                            <X className="w-3 h-3" />
+                            <span>Remove</span>
+                          </button>
+                        </div>
+                      )}
 
                       {/* Warnings */}
                       {q.warnings.length > 0 && (

@@ -17,56 +17,149 @@ const ANSWER_REGEX = /^(?:ANSWER|ANS|CORRECT\s*ANSWER|CORRECT|KEY|ANSW)\s*[:=\-]
 const BOTTOM_KEY_ITEM_REGEX = /(?:Q?(\d+)\s*[:.-]?\s*([A-Ea-e]))/gi;
 const BOTTOM_SECTION_REGEX = /^(?:ANSWER\s+KEYS?|MARKING\s+SCHEME|ANSWERS\s+SHEET)\b/i;
 
+interface BlockItem {
+  type: 'text' | 'image';
+  text?: string;
+  imageSrc?: string;
+}
+
 export async function parseDocxFile(file: File): Promise<{ questions: Question[]; rawText: string }> {
   const arrayBuffer = await file.arrayBuffer();
-  const result = await mammoth.extractRawText({ arrayBuffer });
-  const rawText = result.value;
-  const questions = parseText(rawText);
-  return { questions, rawText };
+
+  // 1. Extract HTML with base64 embedded images
+  try {
+    const htmlResult = await mammoth.convertToHtml(
+      { arrayBuffer },
+      {
+        convertImage: mammoth.images.imgElement((image) => {
+          return image.read("base64").then((imageBuffer) => {
+            return {
+              src: `data:${image.contentType};base64,${imageBuffer}`,
+            };
+          });
+        }),
+      }
+    );
+
+    const questions = parseHtmlBlocks(htmlResult.value);
+    const textResult = await mammoth.extractRawText({ arrayBuffer });
+    return { questions, rawText: textResult.value };
+  } catch (err) {
+    // Fallback to raw text extraction if convertToHtml has any issue
+    const textResult = await mammoth.extractRawText({ arrayBuffer });
+    const questions = parseText(textResult.value);
+    return { questions, rawText: textResult.value };
+  }
+}
+
+export function parseHtmlBlocks(html: string): Question[] {
+  // Extract sequential paragraphs and img tags
+  const blocks: BlockItem[] = [];
+
+  // Match tags like <p>...</p>, <li>...</li>, <tr>...</tr> or <img ... />
+  const tagRegex = /(<img\b[^>]*src=["']([^"']+)["'][^>]*>|<(?:p|li|h[1-6]|tr)[^>]*>(.*?)<\/(?:p|li|h[1-6]|tr)>)/gi;
+  let match;
+  let hasExtracted = false;
+
+  while ((match = tagRegex.exec(html)) !== null) {
+    hasExtracted = true;
+    const fullTag = match[0];
+    const imgSrc = match[2];
+    const innerText = match[3];
+
+    if (imgSrc) {
+      blocks.push({ type: 'image', imageSrc: imgSrc });
+    } else if (innerText !== undefined) {
+      // Strip html tags and decode common html entities
+      const cleanText = innerText
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#039;/g, "'")
+        .trim();
+
+      if (cleanText) {
+        blocks.push({ type: 'text', text: cleanText });
+      }
+    }
+  }
+
+  // If regex found no paragraphs (e.g. plain text or unusual markup), fallback to raw text
+  if (!hasExtracted || blocks.length === 0) {
+    const stripped = html.replace(/<[^>]+>/g, '\n');
+    return parseText(stripped);
+  }
+
+  return processBlocksIntoQuestions(blocks);
 }
 
 export function parseText(rawText: string): Question[] {
-  const lines = rawText.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  const lines = rawText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l.length > 0);
+  const blocks: BlockItem[] = lines.map((line) => ({ type: 'text', text: line }));
+  return processBlocksIntoQuestions(blocks);
+}
+
+function processBlocksIntoQuestions(blocks: BlockItem[]): Question[] {
   const questions: Question[] = [];
   const bottomKeys: { [key: number]: string } = {};
 
-  // First pass: extract bottom answer keys if any
-  const keptLines: string[] = [];
+  // First pass: scan for bottom answer keys in text blocks
+  const keptBlocks: BlockItem[] = [];
   let inBottomKeySection = false;
 
-  for (const line of lines) {
-    if (ANSWER_REGEX.test(line)) {
-      keptLines.push(line);
-      continue;
-    }
-
-    if (BOTTOM_SECTION_REGEX.test(line)) {
-      inBottomKeySection = true;
-      let match;
-      const regex = new RegExp(BOTTOM_KEY_ITEM_REGEX);
-      while ((match = regex.exec(line)) !== null) {
-        bottomKeys[parseInt(match[1], 10)] = match[2].toUpperCase();
+  for (const block of blocks) {
+    if (block.type === 'text' && block.text) {
+      const line = block.text;
+      if (ANSWER_REGEX.test(line)) {
+        keptBlocks.push(block);
+        continue;
       }
-      continue;
-    }
 
-    if (inBottomKeySection) {
-      let match;
-      const regex = new RegExp(BOTTOM_KEY_ITEM_REGEX);
-      while ((match = regex.exec(line)) !== null) {
-        bottomKeys[parseInt(match[1], 10)] = match[2].toUpperCase();
+      if (BOTTOM_SECTION_REGEX.test(line)) {
+        inBottomKeySection = true;
+        let match;
+        const regex = new RegExp(BOTTOM_KEY_ITEM_REGEX);
+        while ((match = regex.exec(line)) !== null) {
+          bottomKeys[parseInt(match[1], 10)] = match[2].toUpperCase();
+        }
+        continue;
       }
-      continue;
+
+      if (inBottomKeySection) {
+        let match;
+        const regex = new RegExp(BOTTOM_KEY_ITEM_REGEX);
+        while ((match = regex.exec(line)) !== null) {
+          bottomKeys[parseInt(match[1], 10)] = match[2].toUpperCase();
+        }
+        continue;
+      }
     }
 
-    keptLines.push(line);
+    keptBlocks.push(block);
   }
 
   let currentQ: Question | null = null;
   let currentOptionLetter: string | null = null;
 
-  for (let i = 0; i < keptLines.length; i++) {
-    const text = keptLines[i];
+  for (let i = 0; i < keptBlocks.length; i++) {
+    const item = keptBlocks[i];
+
+    // Handle Image Block
+    if (item.type === 'image' && item.imageSrc) {
+      if (currentQ) {
+        // Attach image to current question stem
+        if (!currentQ.image) {
+          currentQ.image = item.imageSrc;
+        }
+      }
+      continue;
+    }
+
+    // Handle Text Block
+    const text = item.text || '';
 
     // 1. Check for single question answer
     const ansMatch = text.match(ANSWER_REGEX);
@@ -97,7 +190,7 @@ export function parseText(rawText: string): Question[] {
         options: {},
         answer: null,
         warnings: [],
-        rawLines: [text]
+        rawLines: [text],
       };
       currentOptionLetter = null;
       continue;
@@ -213,7 +306,7 @@ function finalizeQuestion(q: Question, bottomKeys: { [key: number]: string }) {
 
   const optCount = Object.keys(q.options).length;
   if (optCount < 4) {
-    const missing = ['A', 'B', 'C', 'D'].filter(l => !q.options[l]);
+    const missing = ['A', 'B', 'C', 'D'].filter((l) => !q.options[l]);
     warnings.push(`Incomplete options (${optCount}/4 detected). Missing: ${missing.join(', ')}`);
   }
 

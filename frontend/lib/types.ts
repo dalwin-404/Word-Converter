@@ -6,6 +6,7 @@ export interface Question {
   answer: string | null;
   warnings: string[];
   rawLines?: string[];
+  image?: string; // base64 data URI of diagram/image
 }
 
 export interface SchoolPreset {
