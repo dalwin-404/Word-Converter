@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "CBTFlow — Universal CBT & Exam Word Converter",
   description: "Convert teacher exam Word documents into standardized CBT templates for schools, colleges, universities, WAEC, JAMB, Moodle, and any institution.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
