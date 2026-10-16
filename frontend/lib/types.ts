@@ -17,11 +17,15 @@ export interface SchoolPreset {
   instructions: string;
   optionPrefix: 'A)' | 'A.' | '(A)';
   fontName: string;
+  subject?: string;
+  classLevel?: string;
 }
 
 export interface BatchFileResult {
   fileName: string;
   cleanName: string;
+  subject?: string;
+  classLevel?: string;
   questions: Question[];
   warningsCount: number;
   success: boolean;

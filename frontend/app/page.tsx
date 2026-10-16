@@ -118,10 +118,141 @@ C) Europe
 D) South America
 ANSWER: B`;
 
+interface SubjectPreset {
+  id: string;
+  name: string;
+  icon: string;
+  title: string;
+  instructions: string;
+  font?: string;
+}
+
+const SUBJECT_PRESETS: SubjectPreset[] = [
+  {
+    id: 'math',
+    name: 'Mathematics',
+    icon: '📐',
+    title: 'MATHEMATICS CBT EXAMINATION',
+    instructions: 'Answer all questions. Show clear workings. Use of scientific calculators is allowed.',
+    font: 'Calibri',
+  },
+  {
+    id: 'fmath',
+    name: 'Further Mathematics',
+    icon: '🔬',
+    title: 'FURTHER MATHEMATICS CBT EXAMINATION',
+    instructions: 'Answer all questions. Show all mathematical derivations, formulas, and calculations clearly.',
+    font: 'Calibri',
+  },
+  {
+    id: 'english',
+    name: 'English Language',
+    icon: '📖',
+    title: 'ENGLISH LANGUAGE CBT EXAMINATION',
+    instructions: 'Read each passage and question carefully before choosing the most appropriate option.',
+    font: 'Calibri',
+  },
+  {
+    id: 'yoruba',
+    name: 'Yorùbá',
+    icon: '🌍',
+    title: 'ÈDÈ YORÙBÁ - ÌDÁNWÒ ILÉ-ÌWÉ (CBT)',
+    instructions: 'Dáhùn gbogbo àwọn ìbéèrè wọ̀nyí ní kíkún. Kíyèsí àkọtọ́ àti àmì ohùn dáadáa.',
+    font: 'Calibri',
+  },
+  {
+    id: 'biology',
+    name: 'Biology',
+    icon: '🧬',
+    title: 'BIOLOGY CBT EXAMINATION',
+    instructions: 'Answer all questions. Pay attention to biological diagrams, structures, and specimens.',
+    font: 'Arial',
+  },
+  {
+    id: 'chemistry',
+    name: 'Chemistry',
+    icon: '🧪',
+    title: 'CHEMISTRY CBT EXAMINATION',
+    instructions: 'Answer all questions. Chemical formulas, valence states, and standard conditions apply.',
+    font: 'Arial',
+  },
+  {
+    id: 'physics',
+    name: 'Physics',
+    icon: '⚡',
+    title: 'PHYSICS CBT EXAMINATION',
+    instructions: 'Answer all questions. Take acceleration due to gravity g = 10m/s² where applicable.',
+    font: 'Calibri',
+  },
+  {
+    id: 'ict',
+    name: 'Computer Studies / ICT',
+    icon: '💻',
+    title: 'COMPUTER STUDIES CBT EXAMINATION',
+    instructions: 'Answer all questions. Practical computer shortcuts, software commands, and hardware concepts apply.',
+    font: 'Calibri',
+  },
+  {
+    id: 'economics',
+    name: 'Economics',
+    icon: '📊',
+    title: 'ECONOMICS CBT EXAMINATION',
+    instructions: 'Answer all questions. Economic curves, tables, and market schedules should be evaluated carefully.',
+    font: 'Calibri',
+  },
+  {
+    id: 'civic',
+    name: 'Civic Education',
+    icon: '🏛️',
+    title: 'CIVIC EDUCATION CBT EXAMINATION',
+    instructions: 'Answer all questions on democratic values, national symbols, and human rights.',
+    font: 'Calibri',
+  },
+];
+
+function detectSubjectAndClass(fileName: string): { subject?: string; classLevel?: string } {
+  const lower = fileName.toLowerCase();
+  let sub: string | undefined;
+  let cls: string | undefined;
+
+  if (lower.includes('further') || lower.includes('fmath') || lower.includes('f_math')) {
+    sub = 'FURTHER MATHEMATICS';
+  } else if (lower.includes('math') || lower.includes('arith')) {
+    sub = 'MATHEMATICS';
+  } else if (lower.includes('yoruba') || lower.includes('ede') || lower.includes('asa')) {
+    sub = 'YORÙBÁ';
+  } else if (lower.includes('english') || lower.includes('eng') || lower.includes('lit')) {
+    sub = 'ENGLISH LANGUAGE';
+  } else if (lower.includes('bio')) {
+    sub = 'BIOLOGY';
+  } else if (lower.includes('chem')) {
+    sub = 'CHEMISTRY';
+  } else if (lower.includes('phy')) {
+    sub = 'PHYSICS';
+  } else if (lower.includes('computer') || lower.includes('ict') || lower.includes('data')) {
+    sub = 'COMPUTER STUDIES / ICT';
+  } else if (lower.includes('econ')) {
+    sub = 'ECONOMICS';
+  } else if (lower.includes('civic') || lower.includes('gov')) {
+    sub = 'CIVIC EDUCATION';
+  } else if (lower.includes('agric')) {
+    sub = 'AGRICULTURAL SCIENCE';
+  }
+
+  const classMatch = lower.match(/\b(ss\s*[1-3]|jss\s*[1-3]|year\s*\d+|grade\s*\d+|basic\s*\d+)\b/);
+  if (classMatch) {
+    cls = classMatch[1].toUpperCase().replace(/\s+/g, ' ');
+  }
+
+  return { subject: sub, classLevel: cls };
+}
+
 export default function CBTFlowApp() {
   // Preset & Configuration State
   const [selectedPresetId, setSelectedPresetId] = useState<string>('standard');
   const [schoolName, setSchoolName] = useState<string>('EXCELLENCE ACADEMY');
+  const [subject, setSubject] = useState<string>('MATHEMATICS');
+  const [classLevel, setClassLevel] = useState<string>('SS 2');
   const [templateTitle, setTemplateTitle] = useState<string>('CBT EXAM QUESTIONS TEMPLATE');
   const [instructions, setInstructions] = useState<string>(
     'Instructions for Teachers: Type each question number (e.g. 1.), followed by options A, B, C, D, and write ANSWER: [Letter] below the options.'
@@ -152,8 +283,11 @@ export default function CBTFlowApp() {
       instructions,
       optionPrefix,
       fontName,
+      subject,
+      classLevel,
     });
-    triggerDownload(blob, `${schoolName.replace(/\s+/g, '_')}_Official_CBT_Template.docx`);
+    const subSlug = subject ? `_${subject.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+    triggerDownload(blob, `${schoolName.replace(/\s+/g, '_')}${subSlug}_Official_CBT_Template.docx`);
   };
 
   // Apply Preset
@@ -166,6 +300,21 @@ export default function CBTFlowApp() {
       setInstructions(p.instructions);
       setOptionPrefix(p.optionPrefix);
       setFontName(p.fontName);
+      if (p.subject) setSubject(p.subject);
+      if (p.classLevel) setClassLevel(p.classLevel);
+    }
+  };
+
+  // Apply Subject Preset
+  const handleSubjectSelect = (subId: string) => {
+    const target = SUBJECT_PRESETS.find((x) => x.id === subId);
+    if (target) {
+      setSubject(target.name.toUpperCase());
+      setTemplateTitle(target.title);
+      setInstructions(target.instructions);
+      if (target.font) {
+        setFontName(target.font);
+      }
     }
   };
 
@@ -185,11 +334,28 @@ export default function CBTFlowApp() {
     confetti({ particleCount: 40, spread: 60, origin: { y: 0.7 } });
   };
 
-  // File Drop / Selection
+  // File Drop / Selection with Auto-Subject Detection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const files = Array.from(e.target.files);
       setSelectedFiles((prev) => [...prev, ...files]);
+
+      // Auto-detect subject and class from the first uploaded file name
+      const detected = detectSubjectAndClass(files[0].name);
+      if (detected.subject) {
+        setSubject(detected.subject);
+        const subMatch = SUBJECT_PRESETS.find((x) => x.name.toUpperCase() === detected.subject);
+        if (subMatch) {
+          setTemplateTitle(subMatch.title);
+          setInstructions(subMatch.instructions);
+          if (subMatch.font) {
+            setFontName(subMatch.font);
+          }
+        }
+      }
+      if (detected.classLevel) {
+        setClassLevel(detected.classLevel);
+      }
     }
   };
 
@@ -219,12 +385,18 @@ export default function CBTFlowApp() {
       instructions,
       optionPrefix,
       fontName,
+      subject,
+      classLevel,
     };
 
     const results: BatchFileResult[] = [];
 
     for (const file of selectedFiles) {
       const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/\s+/g, '_');
+      const detected = detectSubjectAndClass(file.name);
+      const fileSub = detected.subject || subject;
+      const fileCls = detected.classLevel || classLevel;
+
       try {
         let qs: Question[] = [];
         if (file.name.toLowerCase().endsWith('.docx')) {
@@ -239,6 +411,8 @@ export default function CBTFlowApp() {
         results.push({
           fileName: file.name,
           cleanName,
+          subject: fileSub,
+          classLevel: fileCls,
           questions: qs,
           warningsCount,
           success: true,
@@ -247,6 +421,8 @@ export default function CBTFlowApp() {
         results.push({
           fileName: file.name,
           cleanName,
+          subject: fileSub,
+          classLevel: fileCls,
           questions: [],
           warningsCount: 0,
           success: false,
@@ -335,26 +511,32 @@ export default function CBTFlowApp() {
       instructions,
       optionPrefix,
       fontName,
+      subject,
+      classLevel,
     });
-    triggerDownload(blob, `${schoolName.replace(/\s+/g, '_')}_CBT_Exam.docx`);
+    const subSlug = subject ? `_${subject.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+    triggerDownload(blob, `${schoolName.replace(/\s+/g, '_')}${subSlug}_CBT_Exam.docx`);
   };
 
   const handleDownloadAiken = () => {
     if (questions.length === 0) return;
     const text = generateAikenText(questions, schoolName);
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    triggerDownload(blob, `${schoolName.replace(/\s+/g, '_')}_Aiken.txt`);
+    const subSlug = subject ? `_${subject.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+    triggerDownload(blob, `${schoolName.replace(/\s+/g, '_')}${subSlug}_Aiken.txt`);
   };
 
   const handleDownloadExcel = () => {
     if (questions.length === 0) return;
     const blob = generateExcelBlob(questions);
-    triggerDownload(blob, `${schoolName.replace(/\s+/g, '_')}_CBT_Matrix.xlsx`);
+    const subSlug = subject ? `_${subject.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+    triggerDownload(blob, `${schoolName.replace(/\s+/g, '_')}${subSlug}_CBT_Matrix.xlsx`);
   };
 
   const handleDownloadZip = () => {
     if (!batchZipBlob) return;
-    triggerDownload(batchZipBlob, `${schoolName.replace(/\s+/g, '_')}_Batch_CBT_Exams.zip`);
+    const subSlug = subject ? `_${subject.replace(/[^a-zA-Z0-9]/g, '_')}` : '';
+    triggerDownload(batchZipBlob, `${schoolName.replace(/\s+/g, '_')}${subSlug}_Batch_CBT_Exams.zip`);
   };
 
   const totalWarnings = questions.reduce((acc, q) => acc + q.warnings.length, 0);
@@ -511,6 +693,70 @@ export default function CBTFlowApp() {
                   placeholder="e.g. CBT EXAM QUESTIONS TEMPLATE"
                   className="w-full text-xs font-medium px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:border-amber-500 text-slate-200 uppercase"
                 />
+              </div>
+
+              {/* Subject & Class Specification */}
+              <div className="space-y-2 pt-1 border-t border-slate-800/80">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-medium text-slate-300">
+                    Subject / Course & Class
+                  </label>
+                  <span className="text-[10px] text-amber-400 font-semibold">
+                    Auto-configured with subject presets
+                  </span>
+                </div>
+
+                {/* Quick Subject Pills */}
+                <div className="flex flex-wrap gap-1 pb-0.5">
+                  {[
+                    { id: 'math', name: 'Maths', icon: '📐' },
+                    { id: 'english', name: 'English', icon: '📖' },
+                    { id: 'yoruba', name: 'Yorùbá', icon: '🌍' },
+                    { id: 'fmath', name: 'Further Maths', icon: '🔬' },
+                    { id: 'biology', name: 'Biology', icon: '🧬' },
+                    { id: 'physics', name: 'Physics', icon: '⚡' },
+                    { id: 'ict', name: 'ICT', icon: '💻' },
+                  ].map((subItem) => (
+                    <button
+                      key={subItem.id}
+                      type="button"
+                      onClick={() => handleSubjectSelect(subItem.id)}
+                      className={`text-[11px] px-2 py-0.5 rounded-lg border transition font-medium flex items-center space-x-1 ${
+                        subject.toUpperCase() === subItem.name.toUpperCase() ||
+                        (subItem.id === 'yoruba' && subject.toUpperCase().includes('YOR')) ||
+                        (subItem.id === 'fmath' && subject.toUpperCase().includes('FURTHER')) ||
+                        (subItem.id === 'math' && subject.toUpperCase() === 'MATHEMATICS') ||
+                        (subItem.id === 'english' && subject.toUpperCase().includes('ENGLISH'))
+                          ? 'bg-amber-400 text-slate-950 border-amber-400 font-bold shadow-xs'
+                          : 'bg-slate-900 border-slate-700 text-slate-300 hover:border-slate-500'
+                      }`}
+                    >
+                      <span>{subItem.icon}</span>
+                      <span>{subItem.name}</span>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2">
+                    <input
+                      type="text"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value.toUpperCase())}
+                      placeholder="e.g. MATHEMATICS, ENGLISH, YORÙBÁ..."
+                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:border-amber-500 text-white uppercase tracking-wide"
+                    />
+                  </div>
+                  <div>
+                    <input
+                      type="text"
+                      value={classLevel}
+                      onChange={(e) => setClassLevel(e.target.value.toUpperCase())}
+                      placeholder="Class (SS 2)"
+                      className="w-full text-xs font-semibold px-3 py-2 bg-slate-900 border border-slate-700 rounded-lg focus:outline-none focus:border-amber-500 text-white uppercase tracking-wide text-center"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -672,26 +918,34 @@ export default function CBTFlowApp() {
                 {/* Selected Files Queue */}
                 {selectedFiles.length > 0 && (
                   <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                    {selectedFiles.map((f, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 text-xs"
-                      >
-                        <div className="flex items-center space-x-2 truncate">
-                          <FileText className="w-4 h-4 text-blue-400 flex-shrink-0" />
-                          <span className="font-medium text-slate-200 truncate">{f.name}</span>
-                          <span className="text-[10px] text-slate-500">
-                            ({(f.size / 1024).toFixed(1)} KB)
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => removeFile(i)}
-                          className="text-slate-500 hover:text-red-400 p-1"
+                    {selectedFiles.map((f, i) => {
+                      const detected = detectSubjectAndClass(f.name);
+                      return (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between p-2 rounded-lg bg-slate-900 border border-slate-800 text-xs"
                         >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                          <div className="flex items-center space-x-2 truncate">
+                            <FileText className="w-4 h-4 text-blue-400 flex-shrink-0" />
+                            <span className="font-medium text-slate-200 truncate">{f.name}</span>
+                            <span className="text-[10px] text-slate-500 flex-shrink-0">
+                              ({(f.size / 1024).toFixed(1)} KB)
+                            </span>
+                            {detected.subject && (
+                              <span className="text-[10px] bg-blue-500/20 text-blue-300 border border-blue-500/30 px-1.5 py-0.2 rounded font-semibold flex-shrink-0">
+                                {detected.subject}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => removeFile(i)}
+                            className="text-slate-500 hover:text-red-400 p-1 flex-shrink-0"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -839,11 +1093,18 @@ export default function CBTFlowApp() {
           {/* Virtual Document Paper */}
           <div className="bg-white text-slate-900 rounded-2xl border border-slate-800 shadow-xl p-4 sm:p-8 flex-1 overflow-y-auto max-h-[600px] sm:max-h-[750px] space-y-6">
             {/* School Header */}
-            <div className="text-center pb-4 border-b border-slate-200 space-y-1">
+            <div className="text-center pb-4 border-b border-slate-200 space-y-1.5">
               <h1 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-wide uppercase">
                 {schoolName}
               </h1>
               <h2 className="text-xs sm:text-sm font-bold text-blue-900 uppercase">{templateTitle}</h2>
+              {subject && (
+                <div className="inline-flex items-center space-x-2 bg-blue-50 text-blue-900 border border-blue-200 px-3 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider my-0.5 shadow-2xs">
+                  <span>SUBJECT: {subject}</span>
+                  {classLevel && <span className="text-blue-300">•</span>}
+                  {classLevel && <span>CLASS: {classLevel}</span>}
+                </div>
+              )}
               {instructions && (
                 <p className="text-xs text-slate-500 italic max-w-xl mx-auto pt-1">{instructions}</p>
               )}

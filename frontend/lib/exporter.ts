@@ -9,6 +9,8 @@ export interface ExportOptions {
   instructions: string;
   optionPrefix: 'A)' | 'A.' | '(A)';
   fontName: string;
+  subject?: string;
+  classLevel?: string;
 }
 
 export function base64ToUint8Array(base64: string): Uint8Array {
@@ -28,10 +30,10 @@ export async function generateDocxBlob(questions: Question[], options: ExportOpt
   paragraphs.push(
     new Paragraph({
       alignment: AlignmentType.CENTER,
-      spacing: { before: 0, after: 100 },
+      spacing: { before: 0, after: 60 },
       children: [
         new TextRun({
-          text: `${options.schoolName.toUpperCase()} - ${options.templateTitle.toUpperCase()}`,
+          text: options.schoolName.toUpperCase(),
           bold: true,
           size: 28, // 14pt
           font: options.fontName,
@@ -40,6 +42,45 @@ export async function generateDocxBlob(questions: Question[], options: ExportOpt
       ],
     })
   );
+
+  // 2. Exam Title / Heading
+  paragraphs.push(
+    new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 0, after: options.subject ? 40 : 100 },
+      children: [
+        new TextRun({
+          text: options.templateTitle.toUpperCase(),
+          bold: true,
+          size: 24, // 12pt
+          font: options.fontName,
+          color: '2B6CB0',
+        }),
+      ],
+    })
+  );
+
+  // 3. Subject & Class Banner
+  if (options.subject) {
+    const subBanner = options.classLevel
+      ? `SUBJECT: ${options.subject.toUpperCase()}  |  CLASS: ${options.classLevel.toUpperCase()}`
+      : `SUBJECT: ${options.subject.toUpperCase()}`;
+    paragraphs.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 0, after: 120 },
+        children: [
+          new TextRun({
+            text: subBanner,
+            bold: true,
+            size: 22, // 11pt
+            font: options.fontName,
+            color: '2D3748',
+          }),
+        ],
+      })
+    );
+  }
 
   // 2. Instructions
   if (options.instructions) {
@@ -318,20 +359,29 @@ export async function generateBatchZipBlob(
       continue;
     }
 
-    const docxBlob = await generateDocxBlob(file.questions, options);
-    const aikenText = generateAikenText(file.questions, options.schoolName);
+    const fileOptions: ExportOptions = {
+      ...options,
+      subject: file.subject || options.subject,
+      classLevel: file.classLevel || options.classLevel,
+    };
+    const docxBlob = await generateDocxBlob(file.questions, fileOptions);
+    const aikenText = generateAikenText(file.questions, fileOptions.schoolName);
     const excelBlob = generateExcelBlob(file.questions);
 
-    wordFolder?.file(`${file.cleanName}_CBT_Standard.docx`, docxBlob);
-    aikenFolder?.file(`${file.cleanName}_Aiken.txt`, aikenText);
-    excelFolder?.file(`${file.cleanName}_Matrix.xlsx`, excelBlob);
+    const baseName = file.subject
+      ? `${file.cleanName}_${file.subject.replace(/[^a-zA-Z0-9]/g, '_')}`
+      : file.cleanName;
+
+    wordFolder?.file(`${baseName}_CBT_Standard.docx`, docxBlob);
+    aikenFolder?.file(`${baseName}_Aiken.txt`, aikenText);
+    excelFolder?.file(`${baseName}_Matrix.xlsx`, excelBlob);
 
     // Save individual images for CBT portal uploads
     file.questions.forEach((q) => {
       if (q.image) {
         try {
           const imgBytes = base64ToUint8Array(q.image);
-          diagramsFolder?.file(`${file.cleanName}_Q${q.number}_diagram.png`, imgBytes);
+          diagramsFolder?.file(`${baseName}_Q${q.number}_diagram.png`, imgBytes);
         } catch (e) {
           console.warn('Failed to save diagram into zip', e);
         }
@@ -339,6 +389,7 @@ export async function generateBatchZipBlob(
     });
 
     reportText += `✓ [${file.cleanName}]\n`;
+    reportText += `   • Subject: ${file.subject || options.subject || 'General'}\n`;
     reportText += `   • Questions: ${file.questions.length}\n`;
     reportText += `   • Validation Alerts: ${file.warningsCount}\n`;
     if (file.warningsCount > 0) {

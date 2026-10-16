@@ -32,8 +32,8 @@ const BOTTOM_SECTION_HEADER_REGEX = /^(?:ANSWER\s*KEYS?|MARKING\s*(?:SCHEME|GUID
 // Matches key items: "1. A", "1: B", "1-C", "1) D", "1. (A)", "1. [B]", "Q1: A", "No. 1 = B"
 const BOTTOM_KEY_ITEM_REGEX = /(?:^|[\s,;|]+)(?:Q|No\.?)?\s*(\d+)\s*[-.:=|)]\s*\(?\[?([A-Ea-e])\)?\]?(?=$|[\s,;|]+)/gi;
 
-// Matches a single key line: "1. A", "1. a", "1. (A)", "1 - B"
-const SINGLE_KEY_LINE_REGEX = /^(?:Q|No\.?)?\s*(\d+)\s*[-.:=|)]\s*\(?\[?([A-Ea-e])\)?\]?\s*$/i;
+// Matches a single key line: "1. A", "1. a", "1. (A)", "1 - B", or with option text: "1. (c) =", "2. (a) A single page..."
+const SINGLE_KEY_LINE_REGEX = /^(?:Q|No\.?)?\s*(\d+)\s*[-.:=|)]\s*\(?\[?([A-Ea-e])\)?\]?(?:\s*[-–—:=]\s*|\s{2,}|\s+|$)(.*)$/i;
 
 const ROMAN_MAP: { [key: string]: string } = {
   i: 'A',
@@ -325,9 +325,10 @@ function extractBottomAnswerKeys(blocks: BlockItem[]): {
         continue; // Omit from question stems
       }
 
-      // 4. Standalone single key line: e.g. "1. A"
+      // 4. Standalone single key line: e.g. "1. A" or "1. (c) =" or "2. (a) A single page/tab..."
       const singleMatch = line.match(SINGLE_KEY_LINE_REGEX);
       if (singleMatch) {
+        const hasParentheses = /\([A-Ea-e]\)|\[[A-Ea-e]\]/.test(line);
         let hasSisterKeys = false;
         for (let j = i + 1; j < Math.min(i + 5, blocks.length); j++) {
           const nextText = blocks[j].text?.trim() || '';
@@ -336,7 +337,7 @@ function extractBottomAnswerKeys(blocks: BlockItem[]): {
             break;
           }
         }
-        if (hasSisterKeys || Object.keys(bottomKeys).length > 0) {
+        if (hasParentheses || hasSisterKeys || Object.keys(bottomKeys).length > 0) {
           bottomKeys[parseInt(singleMatch[1], 10)] = singleMatch[2].toUpperCase();
           continue;
         }
