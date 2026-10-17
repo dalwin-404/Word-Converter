@@ -14,6 +14,7 @@ import {
   Table,
   Terminal,
   X,
+  Menu,
   FileCheck,
   ChevronDown,
   Building2,
@@ -273,6 +274,7 @@ export default function CBTFlowApp() {
   const [batchZipBlob, setBatchZipBlob] = useState<Blob | null>(null);
   const [showGuideModal, setShowGuideModal] = useState<boolean>(false);
   const [mobileActiveView, setMobileActiveView] = useState<'editor' | 'preview'>('editor');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -544,30 +546,32 @@ export default function CBTFlowApp() {
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans">
       {/* Top Navbar */}
-      <header className="border-b border-slate-800 bg-slate-950/80 backdrop-blur sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center shadow-lg shadow-amber-500/20 text-slate-950 font-black text-xl">
+      <header className="border-b border-slate-800 bg-slate-950/90 backdrop-blur-md sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 h-14 sm:h-16 flex items-center justify-between gap-2">
+          {/* Brand Logo & Title */}
+          <div className="flex items-center space-x-2.5 sm:space-x-3 min-w-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center shadow-lg shadow-amber-500/20 text-slate-950 font-black text-lg sm:text-xl flex-shrink-0">
               ⚡
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
-                <span className="font-extrabold text-lg tracking-tight text-white">CBTFlow</span>
-                <span className="text-[11px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                  Online & Free
+            <div className="min-w-0">
+              <div className="flex items-center space-x-1.5 sm:space-x-2">
+                <span className="font-extrabold text-base sm:text-lg tracking-tight text-white truncate">CBTFlow</span>
+                <span className="text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded-full flex-shrink-0">
+                  Free CBT
                 </span>
               </div>
-              <p className="text-xs text-slate-400">Universal Word to CBT Exam Converter</p>
+              <p className="text-[11px] text-slate-400 hidden sm:block truncate">Universal Word to CBT Exam Converter</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Desktop Actions (md and up) */}
+          <div className="hidden md:flex items-center space-x-2 lg:space-x-2.5">
             {/* School Preset Selector */}
-            <div className="relative hidden md:block">
+            <div className="relative">
               <select
                 value={selectedPresetId}
                 onChange={(e) => handlePresetChange(e.target.value)}
-                className="text-xs bg-slate-800 border border-slate-700 rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500"
+                className="text-xs bg-slate-800/90 hover:bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-slate-200 focus:outline-none focus:border-amber-500 transition cursor-pointer"
               >
                 {PRESETS.map((p) => (
                   <option key={p.id} value={p.id}>
@@ -579,32 +583,134 @@ export default function CBTFlowApp() {
 
             <button
               onClick={handleDownloadTemplate}
-              className="text-xs flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold shadow-sm transition"
+              className="text-xs flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-bold shadow-sm transition"
               title="Download pre-formatted Microsoft Word template"
             >
               <FileDown className="w-3.5 h-3.5 text-slate-950" />
-              <span className="hidden sm:inline">Download Template (.docx)</span>
-              <span className="sm:hidden">Template</span>
+              <span>Download Template (.docx)</span>
             </button>
 
             <button
               onClick={() => setShowGuideModal(true)}
-              className="text-xs flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition"
+              className="text-xs flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 border border-slate-700 transition"
               title="View CBT Format Guidelines"
             >
               <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Format Guide</span>
+              <span>Format Guide</span>
             </button>
 
             <button
               onClick={handleLoadSample}
-              className="text-xs flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 transition"
+              className="text-xs flex items-center space-x-1.5 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 text-amber-300 border border-slate-700 transition"
+              title="Load demo questions with math diagram"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span className="hidden sm:inline">Load Sample</span>
+              <span>Load Sample</span>
+            </button>
+          </div>
+
+          {/* Mobile Right Controls (< md) */}
+          <div className="flex md:hidden items-center space-x-1.5">
+            <button
+              onClick={handleDownloadTemplate}
+              className="text-xs flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-bold shadow-xs transition"
+              title="Download Word Template"
+            >
+              <FileDown className="w-3.5 h-3.5 text-slate-950" />
+              <span>Template</span>
+            </button>
+
+            <button
+              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 text-slate-200 transition focus:outline-none focus:border-amber-400"
+              aria-label="Toggle navigation menu"
+            >
+              {mobileMenuOpen ? (
+                <X className="w-5 h-5 text-amber-400" />
+              ) : (
+                <Menu className="w-5 h-5 text-slate-200" />
+              )}
             </button>
           </div>
         </div>
+
+        {/* Mobile Dropdown Menu Drawer (< md) */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-slate-800/80 bg-slate-950/95 backdrop-blur-xl px-4 py-3.5 space-y-3 shadow-2xl transition-all">
+            {/* School / Exam Preset Selector on Mobile */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-slate-400 flex items-center space-x-1.5">
+                <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                <span>School / Exam Preset:</span>
+              </label>
+              <select
+                value={selectedPresetId}
+                onChange={(e) => {
+                  handlePresetChange(e.target.value);
+                  setMobileMenuOpen(false);
+                }}
+                className="w-full text-xs bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-amber-500 font-medium"
+              >
+                {PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Quick Actions Grid */}
+            <div className="grid grid-cols-2 gap-2 pt-0.5">
+              <button
+                onClick={() => {
+                  setShowGuideModal(true);
+                  setMobileMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left transition flex flex-col space-y-1 active:scale-95"
+              >
+                <div className="flex items-center space-x-1.5 text-amber-400 font-bold text-xs">
+                  <HelpCircle className="w-4 h-4 flex-shrink-0" />
+                  <span>Format Guide</span>
+                </div>
+                <span className="text-[10px] text-slate-400 leading-tight">Exam rules & Yoruba layout</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  handleLoadSample();
+                  setMobileMenuOpen(false);
+                }}
+                className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-left transition flex flex-col space-y-1 active:scale-95"
+              >
+                <div className="flex items-center space-x-1.5 text-amber-300 font-bold text-xs">
+                  <Sparkles className="w-4 h-4 flex-shrink-0 text-amber-400" />
+                  <span>Load Sample</span>
+                </div>
+                <span className="text-[10px] text-slate-400 leading-tight">Test questions & math diagram</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => {
+                handleDownloadTemplate();
+                setMobileMenuOpen(false);
+              }}
+              className="w-full py-2.5 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 active:scale-98 text-slate-950 font-bold text-xs shadow-md transition flex items-center justify-center space-x-2"
+            >
+              <FileDown className="w-4 h-4" />
+              <span>Download Official Template (.docx)</span>
+            </button>
+
+            {/* Privacy & Offline Banner */}
+            <div className="pt-2 flex items-center justify-between text-[10px] text-slate-500 border-t border-slate-800/80">
+              <span className="flex items-center space-x-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block animate-pulse"></span>
+                <span>Client-Side Processing</span>
+              </span>
+              <span>100% Free • No Sign-Up</span>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Grid Content */}
